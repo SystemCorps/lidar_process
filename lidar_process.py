@@ -117,7 +117,7 @@ class Lidar:
             return np.array(possible_head_idx)
 
     # self.desired_pos.pose.position.x = self.local_position.pose.position.x
-    def next_Best(self, waypoint, curPos, relative=False):
+    def next_Best(self, waypoint, curPos, dist=1.0, relative=False):
         # waypoint: Target x, y position from world coordinate, [xWay, yWay]
         # curPos: Current x, y position from world coordinate, [xCur, yCur]
         # relative: If false, it returns new local target point from world coordinate [xTarWld, yTarWld] list,
@@ -135,7 +135,7 @@ class Lidar:
             Adir_err = np.abs(dir_err)
             idx = np.argmax(Adir_err)
 
-            if self.newCandts[idx, 1] >= dist2goal:
+            if dist >= dist2goal:
                 isVisible = True    # When waypoint is directly reachable
 
 
@@ -150,7 +150,7 @@ class Lidar:
             newPos = np.zeros((len(self.newCandts),2))
             newRelPos = np.zeros((len(self.newCandts),2))
             for i in range(len(self.newCandts)):
-                d1 = self.newCandts[i, 1]      # Possible moving distance without collision
+                d1 = dist      # Possible moving distance without collision
                 x1 = d1 * np.cos(self.newCandts[i, 0])     # New relative position after moving to ith direction and distance
                 y1 = d1 * np.sin(self.newCandts[i, 0])
                 x1Wld = curPos[0] + x1                      # New absolute position after moving to ith direction and distance
