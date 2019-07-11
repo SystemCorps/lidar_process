@@ -116,15 +116,17 @@ class Lidar:
             if min_dist >= dist+limit:
                 if i > 180:
                     newI = i - 360
-                possible_head.append([np.rad2deg(newI), min_dist])
+                else:
+                    newI = i
+                possible_head.append([np.deg2rad(newI), min_dist])
                 possible_head_idx.append([i, min_dist])
 
         self.candidates = np.array(possible_head)
 
-        if ret:
-            return np.array(possible_head)
         if ret and rad == False:
             return np.array(possible_head_idx)
+        elif ret:
+            return np.array(possible_head)
 
     # self.desired_pos.pose.position.x = self.local_position.pose.position.x
     def next_Best(self, waypoint, curPos, dist=1.0, relative=False):
@@ -186,3 +188,30 @@ class Lidar:
             return [xTarWld, yTarWld]
         else:
             return [xTarRel, yTarRel]
+
+
+
+def main():
+    rospy.init_node("lidar_test", anonymous=True)
+    lidar = Lidar()
+
+    rate = 5
+    loop = rospy.Rate(rate)
+
+    distance = 0.2
+    limit = 0.03
+    min_dist = 0.01
+    split = 10
+    waypoint = [1.0, 0.0]
+    curPos = [0.0, 0.0]
+
+    while not rospy.is_shutdown():
+        lidar.exact_possible(split=split, dist=distance, limit=limit, minDist=min_dist)
+        next_pos = lidar.next_Best(waypoint=waypoint, curPos=curPos, dist=distance)
+        print(next_pos)
+        loop.rate()
+
+
+
+if __name__ == "__main__":
+    main()
