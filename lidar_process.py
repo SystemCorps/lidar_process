@@ -28,13 +28,22 @@ class Lidar:
                 self.filtered_data[i] = self.lidar_data.ranges[i]
 
 
-    def exact_possible(self, split=5, dist=1.0, limit=0.73, ret=False):
+    def exact_possible(self, split=5, dist=1.0, limit=0.73, minDist=0.1, ret=False):
         moving_dist = np.linspace(limit, dist+limit, split)
-        temp = self.scan_possible(dist=moving_dist[i], limit=limit, ret=True)
+        temp = self.scan_possible(dist=moving_dist[0], limit=limit, ret=True)
         for i in range(len(moving_dist)):
-            temp = self.scan_possible_sub(possibles=temp, dist=moving_dist[i], limit=limit)
+            temp2 = self.scan_possible_sub(possibles=temp, dist=moving_dist[i], limit=limit)
+            if len(temp2) == 0:
+                break
+            else:
+                temp = temp2
 
-        canditsNew = np.array([np.deg2rad(temp[:,0]), temp[:,1]])
+        if len(temp) == 0:
+            temp = self.scan_possible(dist=minDist, limit=limit, ret=True)
+
+        degs = temp[:][0]
+        degsNew = np.where(degs<=180, degs, degs-360)
+        canditsNew = np.array([np.deg2rad(degsNew), temp[:][1]])
         self.newCandts = canditsNew
 
         if ret:
@@ -67,6 +76,7 @@ class Lidar:
             min_dist = np.amin(scan)
             if min_dist >= dist + limit:
                 possible_head.append([i, min_dist])
+
 
         return np.array(possible_head)
 
