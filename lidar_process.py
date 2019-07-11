@@ -13,6 +13,7 @@ class Lidar:
         self.lidar_max = 3.5        # Maximum range of LiDAR
         self.candidates = []
         self.lidar_scan_sub = rospy.Subscriber('/scan', LaserScan, self.lidar_callback)
+        self.newCandts = []
 
         self.yaw2goal_thresh = 5.0
 
@@ -27,15 +28,18 @@ class Lidar:
                 self.filtered_data[i] = self.lidar_data.ranges[i]
 
 
-    def exact_possible(self, split=5, dist=1.0, limit=0.73):
+    def exact_possible(self, split=5, dist=1.0, limit=0.73, ret=False):
         moving_dist = np.linspace(limit, dist+limit, split)
         temp = self.scan_possible(dist=moving_dist[i], limit=limit, ret=True)
         for i in range(len(moving_dist)):
             temp = self.scan_possible_sub(possibles=temp, dist=moving_dist[i], limit=limit)
 
         canditsNew = np.array([np.deg2rad(temp[:,0]), temp[:,1]])
+        self.newCandts = canditsNew
 
-        return canditsNew
+        if ret:
+            return canditsNew
+
 
 
     def scan_possible_sub(self, possibles, dist, limit):
@@ -57,7 +61,7 @@ class Lidar:
 
             else:
                 scan_pos = self.filtered_data[(idx - theta_int):]
-                scan_neg = self.filtered_data[:theta_int - (len(self.filtered_data - idx) + 1]
+                scan_neg = self.filtered_data[:theta_int - (len(self.filtered_data) - idx) + 1]
                 scan = np.concatenate((scan_pos, scan_neg), axis=None)
 
             min_dist = np.amin(scan)
@@ -125,30 +129,30 @@ class Lidar:
         rel_yaw = np.arctan2(yRel, xRel)
         dist2goal = np.linalg.norm(rel_pos)
 
-        dir_err = self.candidates[:, 0] - rel_yaw
+        dir_err = self.newCandts[:, 0] - rel_yaw
         idx = 0
         if np.abs(np.amin(dir_err)) <= np.deg2rad(self.yaw2goal_thresh):
             Adir_err = np.abs(dir_err)
             idx = np.argmax(Adir_err)
 
-            if self.candidates[idx, 1] >= dist2goal:
+            if self.newCandts[idx, 1] >= dist2goal:
                 isVisible = True    # When waypoint is directly reachable
 
 
         if isVisible:       # Go to the waypoint directly
-            xTarRel = dist2goal * np.cos(self.candidates[idx, 0])
-            yTarRel = dist2goal * np.sin(self.candidates[idx, 0])
+            xTarRel = dist2goal * np.cos(self.newCandts[idx, 0])
+            yTarRel = dist2goal * np.sin(self.newCandts[idx, 0])
             xTarWld = waypoint[0]
             yTarWld = waypoint[1]
 
         else:
-            newDist = np.zeros(len(self.candidates))
-            newPos = np.zeros((len(self.candidates),2))
-            newRelPos = np.zeros((len(self.candidates),2))
-            for i in range(len(self.candidates)):
-                d1 = self.candidates[i, 1]      # Possible moving distance without collision
-                x1 = d1 * np.cos(self.candidates[i, 0])     # New relative position after moving to ith direction and distance
-                y1 = d1 * np.sin(self.candidates[i, 0])
+            newDist = np.zeros(len(self.newCandts))
+            newPos = np.zeros((len(self.newCandts),2))
+            newRelPos = np.zeros((len(self.newCandts),2))
+            for i in range(len(self.newCandts)):
+                d1 = self.newCandts[i, 1]      # Possible moving distance without collision
+                x1 = d1 * np.cos(self.newCandts[i, 0])     # New relative position after moving to ith direction and distance
+                y1 = d1 * np.sin(self.newCandts[i, 0])
                 x1Wld = curPos[0] + x1                      # New absolute position after moving to ith direction and distance
                 y1Wld = curPos[1] + y1
                 p1Wld = np.array([x1Wld, y1Wld])
