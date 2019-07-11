@@ -27,8 +27,51 @@ class Lidar:
                 self.filtered_data[i] = self.lidar_data.ranges[i]
 
 
+    def exact_possible(self, split=5, dist=1.0, limit=0.73):
+        moving_dist = np.linspace(limit, dist+limit, split)
+        temp = self.scan_possible(dist=moving_dist[i], limit=limit, ret=True)
+        for i in range(len(moving_dist)):
+            temp = self.scan_possible_sub(possibles=temp, dist=moving_dist[i], limit=limit)
 
-    def scan_possible(self, dist=1.0, limit=0.73, ret=False):
+        canditsNew = np.array([np.deg2rad(temp[:,0]), temp[:,1]])
+
+        return canditsNew
+
+
+    def scan_possible_sub(self, possibles, dist, limit):
+        temp = np.arctan2(dist, limit)
+        theta = np.pi / 2 - temp
+        theta_deg = np.rad2deg(theta)
+        theta_int = int(math.ceil(theta_deg))
+
+        possible_head = []
+        for i in range(len(possibles)):
+            idx = possibles[i, 0]
+            if idx < theta_int:
+                scan_pos = self.filtered_data[:theta_int + idx + 1]
+                scan_neg = self.filtered_data[-(theta_int - idx):]
+                scan = np.concatenate((scan_neg, scan_pos), axis=None)
+
+            elif (idx >= theta_int) and (idx < len(self.filtered_data) - theta_int):
+                scan = self.filtered_data[(idx - theta_int):(idx + theta_int + 1)]
+
+            else:
+                scan_pos = self.filtered_data[(idx - theta_int):]
+                scan_neg = self.filtered_data[:theta_int - (len(self.filtered_data - idx) + 1]
+                scan = np.concatenate((scan_pos, scan_neg), axis=None)
+
+            min_dist = np.amin(scan)
+            if min_dist >= dist + limit:
+                possible_head.append([i, min_dist])
+
+        return np.array(possible_head)
+
+
+
+
+
+
+    def scan_possible(self, dist=1.0, limit=0.73, ret=False, rad=False):
         # dist: moving distance for next step
         # limit: width of drone + margin
         # ret: if true, it returns candidates as numpy array
@@ -39,6 +82,7 @@ class Lidar:
         theta_int = int(math.ceil(theta_deg))
 
         possible_head = []
+        possible_head_idx = []
         for i in range(len(self.lidar_data.ranges)):
             if i < theta_int:
                 scan_pos = self.filtered_data[:theta_int+i+1]
@@ -54,15 +98,19 @@ class Lidar:
                 scan = np.concatenate((scan_pos, scan_neg), axis=None)
 
             min_dist = np.amin(scan)
+            newI = 0
             if min_dist >= dist+limit:
                 if i > 180:
                     newI = i - 360
                 possible_head.append([np.rad2deg(newI), min_dist])
+                possible_head_idx.append([i, min_dist])
 
         self.candidates = np.array(possible_head)
 
         if ret:
             return np.array(possible_head)
+        if ret and rad == False:
+            return np.array(possible_head_idx)
 
     # self.desired_pos.pose.position.x = self.local_position.pose.position.x
     def next_Best(self, waypoint, curPos, relative=False):
