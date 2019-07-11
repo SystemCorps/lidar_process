@@ -14,6 +14,7 @@ class Lidar:
         self.candidates = []
         self.lidar_scan_sub = rospy.Subscriber('/scan', LaserScan, self.lidar_callback)
         self.newCandts = []
+        self.isScan = False
 
         self.yaw2goal_thresh = 5.0
 
@@ -29,7 +30,11 @@ class Lidar:
 
 
     def exact_possible(self, split=5, dist=1.0, limit=0.73, minDist=0.1, ret=False):
-        moving_dist = np.linspace(limit, dist+limit, split)
+        min_measure = 0.13
+        if limit < min_measure:
+            moving_dist = np.linspace(min_measure, dist+limit, split)
+        else:
+            moving_dist = np.linspace(limit, dist + limit, split)
         temp = self.scan_possible(dist=moving_dist[0], limit=limit, ret=True)
         for i in range(len(moving_dist)):
             temp2 = self.scan_possible_sub(possibles=temp, dist=moving_dist[i], limit=limit)
@@ -41,9 +46,9 @@ class Lidar:
         if len(temp) == 0:
             temp = self.scan_possible(dist=minDist, limit=limit, ret=True)
 
-        degs = temp[:][0]
+        degs = temp[:,0]
         degsNew = np.where(degs<=180, degs, degs-360)
-        canditsNew = np.array([np.deg2rad(degsNew), temp[:][1]])
+        canditsNew = np.array([np.deg2rad(degsNew), temp[:,1]])
         self.newCandts = canditsNew
 
         if ret:
@@ -59,7 +64,7 @@ class Lidar:
 
         possible_head = []
         for i in range(len(possibles)):
-            idx = possibles[i, 0]
+            idx = int(possibles[i, 0])
             if idx < theta_int:
                 scan_pos = self.filtered_data[:theta_int + idx + 1]
                 scan_neg = self.filtered_data[-(theta_int - idx):]
@@ -85,47 +90,41 @@ class Lidar:
 
 
 
-    def scan_possible(self, dist=1.0, limit=0.73, ret=False, rad=False):
+    def scan_possible(self, dist=1.0, limit=0.73, ret=False):
         # dist: moving distance for next step
         # limit: width of drone + margin
         # ret: if true, it returns candidates as numpy array
         # output: n x 2 numpy array, each row: [direction without collision (radian) from drone coordinate, moving distance without collision (m)]
         temp = np.arctan2(dist, limit)
-        theta = np.pi/2 - temp
+        theta = np.pi / 2 - temp
         theta_deg = np.rad2deg(theta)
         theta_int = int(math.ceil(theta_deg))
 
         possible_head = []
-        possible_head_idx = []
-        for i in range(len(self.lidar_data.ranges)):
+        for i in range(360):
             if i < theta_int:
-                scan_pos = self.filtered_data[:theta_int+i+1]
-                scan_neg = self.filtered_data[-(theta_int-i):]
+                scan_pos = self.filtered_data[:theta_int + i + 1]
+                scan_neg = self.filtered_data[-(theta_int - i):]
                 scan = np.concatenate((scan_neg, scan_pos), axis=None)
 
-            elif (i >= theta_int) and (i < len(self.lidar_data.ranges)-theta_int):
-                scan = self.filtered_data[(i-theta_int):(i+theta_int+1)]
+
+            elif i >= theta_int and i < 360 - theta_int:
+                scan = self.filtered_data[(i - theta_int):(i + theta_int + 1)]
 
             else:
-                scan_pos = self.filtered_data[(i-theta_int):]
-                scan_neg = self.filtered_data[:theta_int-(len(self.lidar_data.ranges)-i)+1]
+                scan_pos = self.filtered_data[(i - theta_int):]
+                scan_neg = self.filtered_data[:theta_int - (360 - i) + 1]
                 scan = np.concatenate((scan_pos, scan_neg), axis=None)
 
+            # self.scantest.append(scan)
             min_dist = np.amin(scan)
-            newI = 0
-            if min_dist >= dist+limit:
-                if i > 180:
-                    newI = i - 360
-                else:
-                    newI = i
-                possible_head.append([np.deg2rad(newI), min_dist])
-                possible_head_idx.append([i, min_dist])
+            if min_dist >= dist + limit:
+                avg_dist = np.mean(scan)
+                possible_head.append([i, avg_dist])
 
-        self.candidates = np.array(possible_head)
+        self.candidates = possible_head
 
-        if ret and rad == False:
-            return np.array(possible_head_idx)
-        elif ret:
+        if ret:
             return np.array(possible_head)
 
     # self.desired_pos.pose.position.x = self.local_position.pose.position.x
@@ -199,17 +198,20 @@ def main():
     loop = rospy.Rate(rate)
 
     distance = 0.2
-    limit = 0.03
+    limit = 0.05
     min_dist = 0.01
     split = 10
     waypoint = [1.0, 0.0]
     curPos = [0.0, 0.0]
 
     while not rospy.is_shutdown():
-        lidar.exact_possible(split=split, dist=distance, limit=limit, minDist=min_dist)
-        next_pos = lidar.next_Best(waypoint=waypoint, curPos=curPos, dist=distance)
-        print(next_pos)
-        loop.rate()
+        test = lidar.scan_possible(dist=distance, limit=limit, ret=True)
+        if len(test) is not 0:
+            a = lidar.exact_possible(split=split, dist=distance, limit=limit, minDist=min_dist, ret=True)
+            next_pos = lidar.next_Best(waypoint=waypoint, curPos=curPos, dist=distance)
+            print(next_pos)
+
+        loop.sleep()
 
 
 
