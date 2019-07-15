@@ -16,6 +16,7 @@ class Lidar:
         self.newCandts = []
         self.isScan = False
 
+
         self.yaw2goal_thresh = 5.0
 
 
@@ -128,7 +129,7 @@ class Lidar:
             return np.array(possible_head)
 
     # self.desired_pos.pose.position.x = self.local_position.pose.position.x
-    def next_Best(self, waypoint, curPos, dist=1.0, relative=False):
+    def next_Best(self, newCan, waypoint, curPos, dist=1.0, relative=False):
         # waypoint: Target x, y position from world coordinate, [xWay, yWay]
         # curPos: Current x, y position from world coordinate, [xCur, yCur]
         # relative: If false, it returns new local target point from world coordinate [xTarWld, yTarWld] list,
@@ -140,7 +141,8 @@ class Lidar:
         rel_yaw = np.arctan2(yRel, xRel)
         dist2goal = np.linalg.norm(rel_pos)
 
-        dir_err = self.newCandts[:, 0] - rel_yaw
+        dir_err = newCan[:, 0] - rel_yaw
+        #dir_err = self.newCandts[:, 0] - rel_yaw
         idx = 0
         if np.abs(np.amin(dir_err)) <= np.deg2rad(self.yaw2goal_thresh):
             Adir_err = np.abs(dir_err)
@@ -151,19 +153,19 @@ class Lidar:
 
 
         if isVisible:       # Go to the waypoint directly
-            xTarRel = dist2goal * np.cos(self.newCandts[idx, 0])
-            yTarRel = dist2goal * np.sin(self.newCandts[idx, 0])
+            xTarRel = dist2goal * np.cos(newCan[idx, 0])
+            yTarRel = dist2goal * np.sin(newCan[idx, 0])
             xTarWld = waypoint[0]
             yTarWld = waypoint[1]
 
         else:
-            newDist = np.zeros(len(self.newCandts))
-            newPos = np.zeros((len(self.newCandts),2))
-            newRelPos = np.zeros((len(self.newCandts),2))
-            for i in range(len(self.newCandts)):
+            newDist = np.zeros(len(newCan))
+            newPos = np.zeros((len(newCan),2))
+            newRelPos = np.zeros((len(newCan),2))
+            for i in range(len(newCan)):
                 d1 = dist      # Possible moving distance without collision
-                x1 = d1 * np.cos(self.newCandts[i, 0])     # New relative position after moving to ith direction and distance
-                y1 = d1 * np.sin(self.newCandts[i, 0])
+                x1 = d1 * np.cos(newCan[i, 0])     # New relative position after moving to ith direction and distance
+                y1 = d1 * np.sin(newCan[i, 0])
                 x1Wld = curPos[0] + x1                      # New absolute position after moving to ith direction and distance
                 y1Wld = curPos[1] + y1
                 p1Wld = np.array([x1Wld, y1Wld])
@@ -183,8 +185,9 @@ class Lidar:
             yTarRel = newRelPos[shortestIdx, 1]
 
 
+
         if not relative:
-            return [xTarWld, yTarWld]
+            return [xTarWld, yTarWld, np.rad2deg(newCan[shortestIdx,0]), newCan[shortestIdx,1]]
         else:
             return [xTarRel, yTarRel]
 
@@ -208,7 +211,7 @@ def main():
         test = lidar.scan_possible(dist=distance, limit=limit, ret=True)
         if len(test) is not 0:
             a = lidar.exact_possible(split=split, dist=distance, limit=limit, minDist=min_dist, ret=True)
-            next_pos = lidar.next_Best(waypoint=waypoint, curPos=curPos, dist=distance)
+            next_pos = lidar.next_Best(newCan=a, waypoint=waypoint, curPos=curPos, dist=distance)
             print(next_pos)
 
         loop.sleep()
